@@ -1,0 +1,53 @@
+alias aws_envs="env |grep AWS"
+complete -C '/usr/local/bin/aws_completer' aws
+alias aws-id="aws sts get-caller-identity --output json"
+alias aws_region_eu1="export AWS_DEFAULT_REGION=eu-west-1"
+alias aws_region_euc1="export AWS_DEFAULT_REGION=eu-central-1"
+alias aws_region_us1="export AWS_DEFAULT_REGION=us-east-1"
+alias aws_region_us2="export AWS_DEFAULT_REGION=us-east-2"
+alias aws_region_usw1="export AWS_DEFAULT_REGION=us-west-1"
+alias aws_region_usw2="export AWS_DEFAULT_REGION=us-west-2"
+alias aws-account-number="aws sts get-caller-identity --query Account --output text"
+
+aws-ls() {
+local region="us-east-1"
+local profile="default"
+[[ $1 ]] && local region=$1
+[[ $2 ]] && local profile=$2
+aws ec2 describe-instances --output table --query "Reservations[].Instances[].{Name: Tags[?Key == 'Name'].Value | [0], Id: InstanceId, State: State.Name, Type: InstanceType, Placement: Placement.AvailabilityZone}" --region $region --profile $profile
+}
+compdef _aws_region aws-ls
+
+_aws_region() {
+  local regions=(us-east-1 us-east-2 us-west-1 us-west-2 eu-central-1 eu-west-1 eu-west-2 eu-south-1 eu-west-3 eu-north-1)
+#af-south-1 ap-east-1 ap-southeast-3 ap-south-1 ap-northeast-3 ap-northeast-2 ap-southeast-1 ap-southeast-2 ap-northeast-1 ca-central-1 me-south-1 sa-east-1
+  compadd ${regions}
+}
+compdef _aws_region
+
+aws_profile() {
+  [[ $DEBUG ]] && echo -e "\033[34;1m[DEBUG]\033[0m switching aws profile to $1"
+  export AWS_DEFAULT_PROFILE=$1
+  export AWS_PROFILE=$1
+  #aws-id
+}
+
+_aws_profile() {
+# TODO: Figure out partial completion
+  local profiles=($(aws configure list-profiles))
+  [[ ${DEBUG} ]] && echo -e "\033[34;1m[DEBUG]\033[0m ${profiles}"
+  compadd ${profiles}
+}
+compdef _aws_profile aws_profile
+
+aws_mfa_session_token() {
+  [[ -z $AWS_DEVICE_ARN ]] && echo -e "\033[31;1m[ERROR]\033[0m \$AWS_DEVICE_ARN note set please set this as a global before using" && return 1
+  [[ -z $1 ]] && echo -e "\033[31;1m[ERROR]\033[0m mfa input code required" && return 1
+  local device_arn=$AWS_DEVICE_ARN
+  local mfa_code=$1
+  local json_command="aws sts get-session-token --serial-number $device_arn --token-code $mfa_code"
+  [[ $DEBUG ]] && echo -e "\033[34;1m[DEBUG]\033[0m Getting json with:\n $json_command"
+  local json=$(eval $json_command)
+  export AWS_SESSION_TOKEN=$(echo $json |jq --raw-output ".Credentials.SessionToken" )
+  [[ $DEBUG ]] && echo -e "\033[34;1m[DEBUG]\033[0m AWS_SESSION_TOKEN set to: \n $AWS_SESSION_TOKEN"
+}

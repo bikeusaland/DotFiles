@@ -1,0 +1,111 @@
+set number
+set syntax=on
+set spell
+set wildmenu
+set wildmode=longest,list,full
+set expandtab
+set ignorecase " match both upper and lower cases of words
+set smartcase " match 'word' case-insensitive and 'Word' case-sensitive
+set showmatch " shows matching parenthesis, bracket, or brace
+set showcmd " show commands while they're being typed
+set incsearch " searches as you type
+set hlsearch
+set mouse=a
+set termwinsize=10x0
+map <F9> :w<CR> :source ~/.vim/vimrc<CR>
+noremap <S-up> <c-w>+
+noremap <S-down> <c-w>-
+noremap <S-left> <c-w>>
+noremap <S-right> <c-w><
+
+call plug#begin('~/.vim/plugged')
+Plug 'tpope/vim-fugitive'
+Plug 'vim-airline/vim-airline'
+Plug 'hashivim/vim-terraform'
+Plug 'juliosueiras/vim-terraform-completion'
+Plug 'vim-syntastic/syntastic'
+Plug 'chr4/nginx.vim'
+Plug 'ekalinin/Dockerfile.vim'
+Plug 'pearofducks/ansible-vim'
+Plug 'vim-airline/vim-airline-themes'
+Plug 'preservim/nerdtree'
+Plug 'frazrepo/vim-rainbow'
+
+call plug#end()
+autocmd VimEnter * NERDTree | wincmd p
+autocmd BufEnter * if tabpagenr('$') == 1 && winnr('$') == 1 && exists('b:NERDTree') && b:NERDTree.isTabTree() | quit | endif
+autocmd VimEnter * :bo term
+filetype plugin on " plugins are enabled
+
+let NERDTreeShowHidden=1
+let g:rainbow_active = 1
+let g:airline_powerline_fonts = 1
+if !exists("g:airline_symbols")
+    let g:airline_symbols={}
+    let g:airline_symbols.linenr = ''
+    let g:airline_symbols.maxlinenr = ''
+    let g:airline_section_z = airline#section#create(['%3p%%', 'linenr', 'maxlinenr', '%3v'])
+endif
+
+" airline symbols
+" unicode symbols
+let g:airline_left_sep = '»'
+let g:airline_left_sep = '▶'
+let g:airline_right_sep = '«'
+let g:airline_right_sep = '◀'
+let g:airline_symbols.linenr = '␊'
+let g:airline_symbols.linenr = '␤'
+let g:airline_symbols.linenr = '¶'
+let g:airline_symbols.branch = '⎇'
+let g:airline_symbols.paste = 'ρ'
+let g:airline_symbols.paste = 'Þ'
+let g:airline_symbols.paste = '∥'
+let g:airline_symbols.whitespace = 'Ξ'
+
+" powerline symbols
+" let g:airline_left_sep = ''
+" let g:airline_left_alt_sep = ''
+" let g:airline_right_sep = ''
+" let g:airline_right_alt_sep = ''
+" let g:airline_symbols.branch = ''
+" let g:airline_symbols.colnr = ' :'
+" let g:airline_symbols.readonly = ''
+" let g:airline_symbols.linenr = ' :'
+let g:airline_symbols.maxlinenr = '☰ '
+let g:airline_symbols.dirty='⚡'
+
+" old vim-powerline symbols
+let g:airline_left_sep = '⮀'
+let g:airline_left_alt_sep = '⮁'
+let g:airline_right_sep = '⮂' 
+let g:airline_right_alt_sep = '⮃' 
+let g:airline_symbols.branch = '⭠' 
+let g:airline_symbols.readonly = '⭤' 
+let g:airline_symbols.linenr = '⭡ ' 
+
+" use nice symbols for errors and warnings
+let g:ale_sign_error = '✗'
+let g:ale_sign_warning = '⚠'
+
+autocmd ColorScheme *
+  highlight clear SpellBad
+  highlight SpellBad
+  \ cterm=Underline
+  \ ctermfg=NONE
+  \ ctermbg=darkblue
+  \ term=Reverse
+  highlight SpellCap
+  \ cterm=Underline
+  \ ctermfg=NONE
+  \ ctermbg=NONE
+  \ term=Reverse
+  highlight SpellLocal
+  \ cterm=Underline
+  \ ctermfg=NONE
+  \ ctermbg=darkblue
+  \ term=Reverse
+  highlight SpellRare
+  \ cterm=Underline
+  \ ctermfg=NONE
+  \ ctermbg=darkblue
+  \ term=Reverse
