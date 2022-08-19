@@ -1,0 +1,75 @@
+alias aws_envs="env |grep AWS"
+complete -C $(which aws_completer) aws
+alias aws-id="aws sts get-caller-identity --output json"
+alias aws_region_eu1="export AWS_DEFAULT_REGION=eu-west-1"
+alias aws_region_eu2="export AWS_DEFAULT_REGION=eu-west-2"
+alias aws_region_euc1="export AWS_DEFAULT_REGION=eu-central-1"
+alias aws_region_us1="export AWS_DEFAULT_REGION=us-east-1"
+alias aws_region_us2="export AWS_DEFAULT_REGION=us-east-2"
+alias aws_region_usw1="export AWS_DEFAULT_REGION=us-west-1"
+alias aws_region_usw2="export AWS_DEFAULT_REGION=us-west-2"
+alias aws-account-number="aws sts get-caller-identity --query Account --output text"
+
+ssm-ls() {
+#local region="default"
+[[ $1 ]] && local region=$1
+aws ssm get-inventory --region $1
+}
+compdef _aws_region ssm-ls
+
+aws-ls() {
+#local profile="default"
+#local region="us-east-1"
+[[ $1 ]] && local profile=$1
+[[ $2 ]] && local region=$2
+aws ec2 describe-instances --output table --query "Reservations[].Instances[].{Name: Tags[?Key == 'Name'].Value | [0], Id: InstanceId, State: State.Name, Type: InstanceType, Placement: Placement.AvailabilityZone}" --profile $profile
+}
+compdef _aws_profile aws-ls
+
+_aws_region() {
+  local regions=(us-east-1 us-east-2 us-west-1 us-west-2 eu-central-1 eu-west-1 eu-west-2 eu-south-1 eu-west-3 eu-north-1)
+#af-south-1 ap-east-1 ap-southeast-3 ap-south-1 ap-northeast-3 ap-northeast-2 ap-southeast-1 ap-southeast-2 ap-northeast-1 ca-central-1 me-south-1 sa-east-1
+  compadd ${regions}
+}
+compdef _aws_region
+
+aws_profile() {
+  [[ $DEBUG ]] && echo -e "\033[34;1m[DEBUG]\033[0m switching aws profile to $1"
+  export AWS_DEFAULT_PROFILE=$1
+  export AWS_PROFILE=$1
+  #aws-id
+}
+
+_aws_profile() {
+# TODO: Figure out partial completion
+  local profiles=($(aws configure list-profiles))
+  [[ ${DEBUG} ]] && echo -e "\033[34;1m[DEBUG]\033[0m ${profiles}"
+  compadd ${profiles}
+}
+compdef _aws_profile aws_profile
+
+aws_instance_id_by_name () {
+        local _USAGE="Usage: aws_instance_id_by_project_env [-hc] <NAME> <ENVIRONMENT>
+Options:
+-c|connect   Connect with SSM"
+        while getopts ":hc" opt
+        do
+                case $opt in
+                        (h | help) echo $_USAGE
+                                return 0 ;;
+                        (c | connect) local connect=TRUE  ;;
+                        (*) echo -e "\033[31;1m[ERROR]\033[0m Option does not exist : $OPTARG\n"
+                                echo $_USAGE
+                                return 1 ;;
+                esac
+        done
+        shift $(($OPTIND-1))
+        local name=$1
+        local env=$2
+        shift $(($OPTIND[-2]))
+        local id_command="aws ec2 describe-instances --filters=Name=tag:Name,Values=$name --query 'Reservations[].Instances[].InstanceId' --output=text"
+        [[ -n $DEBUG ]] && echo -e "\033[34;1m[DEBUG]\033[0m Getting id command: \n $id_command"
+        local id=$(eval $id_command)
+        [[ -z $connect ]] && echo $id && return 0
+        aws ssm start-session --target $id
+}
