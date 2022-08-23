@@ -10,6 +10,18 @@ alias aws_region_usw1="export AWS_DEFAULT_REGION=us-west-1"
 alias aws_region_usw2="export AWS_DEFAULT_REGION=us-west-2"
 alias aws-account-number="aws sts get-caller-identity --query Account --output text"
 
+ssm-connect() {
+local id=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=$1" --output text --query 'Reservations[*].Instances[*].InstanceId')
+aws ssm start-session --target $id
+}
+compdef _aws_ssm ssm-connect
+
+_aws_ssm() {
+  local name=($(aws ec2 describe-instances --output text  --filters "Name=instance-state-name,Values=running" --query "Reservations[].Instances[].{Name: Tags[?Key == 'Name'].Value | [0] }"))
+  compadd ${name}
+}
+compdef _aws_ssm aws_ssm
+
 ssm-ls() {
 #local region="default"
 [[ $1 ]] && local region=$1
@@ -47,29 +59,3 @@ _aws_profile() {
   compadd ${profiles}
 }
 compdef _aws_profile aws_profile
-
-aws_instance_id_by_name () {
-        local _USAGE="Usage: aws_instance_id_by_project_env [-hc] <NAME> <ENVIRONMENT>
-Options:
--c|connect   Connect with SSM"
-        while getopts ":hc" opt
-        do
-                case $opt in
-                        (h | help) echo $_USAGE
-                                return 0 ;;
-                        (c | connect) local connect=TRUE  ;;
-                        (*) echo -e "\033[31;1m[ERROR]\033[0m Option does not exist : $OPTARG\n"
-                                echo $_USAGE
-                                return 1 ;;
-                esac
-        done
-        shift $(($OPTIND-1))
-        local name=$1
-        local env=$2
-        shift $(($OPTIND[-2]))
-        local id_command="aws ec2 describe-instances --filters=Name=tag:Name,Values=$name --query 'Reservations[].Instances[].InstanceId' --output=text"
-        [[ -n $DEBUG ]] && echo -e "\033[34;1m[DEBUG]\033[0m Getting id command: \n $id_command"
-        local id=$(eval $id_command)
-        [[ -z $connect ]] && echo $id && return 0
-        aws ssm start-session --target $id
-}
