@@ -10,6 +10,18 @@ alias aws_region_usw1="export AWS_DEFAULT_REGION=us-west-1"
 alias aws_region_usw2="export AWS_DEFAULT_REGION=us-west-2"
 alias aws-account-number="aws sts get-caller-identity --query Account --output text"
 
+ssm-connect() {
+local id=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=$1" --output text --query 'Reservations[*].Instances[*].InstanceId')
+aws ssm start-session --target $id
+}
+compdef _aws_ssm ssm-connect
+
+_aws_ssm() {
+  local name=($(aws ec2 describe-instances --output text  --filters "Name=instance-state-name,Values=running" --query "Reservations[].Instances[].{Name: Tags[?Key == 'Name'].Value | [0] }"))
+  compadd ${name}
+}
+compdef _aws_ssm aws_ssm
+
 ssm-ls() {
 #local region="default"
 [[ $1 ]] && local region=$1
