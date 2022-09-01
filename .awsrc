@@ -11,7 +11,7 @@ alias aws_region_usw2="export AWS_DEFAULT_REGION=us-west-2"
 alias aws-account-number="aws sts get-caller-identity --query Account --output text"
 
 ssm-connect() {
-local id=$(aws ec2 describe-instances --filters "Name=tag:Name,Values=$1" --output text --query 'Reservations[*].Instances[*].InstanceId')
+local id=$(aws ec2 describe-instances --filters  "Name=instance-state-name,Values=running" "Name=tag:Name,Values=$1" --output text --query 'Reservations[*].Instances[*].InstanceId')
 aws ssm start-session --target $id
 }
 compdef _aws_ssm ssm-connect
