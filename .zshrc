@@ -54,6 +54,21 @@ tf-log-debug () {
         echo -e "\033[32;1m[INFO]\033[0m Terraform log level set to debug.  Log output at $TF_LOG_PATH"
 }
 
+_git_branch_open() {
+local branches=($(git rev-parse --abbrev-ref=strict --all | uniq))
+  compadd ${branches}
+}
+compdef _git_branch_open bb_open
+bb_open() {
+  local remote=$(git config --get remote.origin.url)
+  local https=$(echo ${remote} | sed 's/git@/https:\/\//')
+  local egit=$(echo ${https} | sed 's/\.git$/\/src\//')
+  local addSlash=$(echo ${egit} | sed 's|\.org:|.org/|')
+  local commit=$(git log $1 | head -1 | cut -f2 -d" ")
+  open "${addSlash}$commit/?at=$1"
+}
+compdef _git_branch_open
+
 source ~/.awsrc
 
 test -e "${HOME}/.iterm2_shell_integration.zsh" && source "${HOME}/.iterm2_shell_integration.zsh"
