@@ -35,6 +35,8 @@ call plug#end()
 autocmd VimEnter * NERDTree | wincmd p
 autocmd BufEnter * if tabpagenr('$') == 1 && winnr('$') == 1 && exists('b:NERDTree') && b:NERDTree.isTabTree() | quit | endif
 autocmd VimEnter * :bo term
+autocmd VimEnter * wincmd k
+autocmd VimEnter * wincmd l
 filetype plugin on " plugins are enabled
 
 let NERDTreeShowHidden=1
