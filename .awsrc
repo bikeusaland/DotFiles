@@ -9,40 +9,42 @@ alias aws_region_us2="export AWS_DEFAULT_REGION=us-east-2"
 alias aws_region_usw1="export AWS_DEFAULT_REGION=us-west-1"
 alias aws_region_usw2="export AWS_DEFAULT_REGION=us-west-2"
 alias aws-account-number="aws sts get-caller-identity --query Account --output text"
+alias aws-unset="unset AWS_DEFAULT_PROFILE;unset AWS_PROFILE; unset AWS_DEFAULT_REGION; unset AWS_SESSION_TOKEN"
+
+aws-decode() {
+[[ $1 ]] && local encoded=$1
+aws sts decode-authorization-message --encoded-message $encoded --query DecodedMessage --output text | jq '.' }
 
 ssm-connect() {
 local id=$(aws ec2 describe-instances --filters "Name=instance-state-name,Values=running" "Name=tag:Name,Values=$1" --output text --query 'Reservations[*].Instances[*].InstanceId')
-match="^[a-zA-Z0-9_:-]+$"
-if [[ $id =~ $match ]]; then
-  aws ssm start-session --target $id
-else
-  echo "Multiple IDs returned:"
-  echo "$id"
-fi
+aws ssm start-session --target $id
 }
 compdef _aws_ssm ssm-connect
+
+aws-ls() {
+[[ $1 ]] && local profile=$1
+[[ $2 ]] && local region=$2
+aws ec2 describe-instances --output table --filters "Name=instance-state-name,Values=running" --query "Reservations[].Instances[].{Name: Tags[?Key == 'Name'].Value | [0], Id: InstanceId, State: State.Name, Type: InstanceType, Placement: Placement.AvailabilityZone, Environment: Tags[?Key == 'Environment'].Value | [0], PublicIP: PublicIpAddress}" }
+compdef _aws_profile aws-ls
+
+
+aws-ls2() {
+[[ $1 ]] && local profile=$1
+[[ $2 ]] && local region=$2
+aws ec2 describe-instances --output table --query "Reservations[].Instances[].{Identifier: InstanceId, Name: Tags[?Key == 'Name'].Value | [0], Environment: Tags[?Key == 'Environment'].Value | [0], Region: Region, State: State.Name, Placement: Placement.AvailabilityZone}" }
+compdef _aws_profile aws-ls2
+
+aws-ip() {
+[[ $1 ]] && local profile=$1
+[[ $2 ]] && local region=$2
+aws ec2 describe-instances --output table --query "Reservations[].Instances[].{Name: Tags[?Key == 'Name'].Value | [0], Id: InstanceId, Type: InstanceType, LaunchTime: LaunchTime, Placement: Placement.AvailabilityZone, PrivateIP: PrivateIpAddress, PublicIP: PublicIpAddress}" --profile $profile }
+compdef _aws_profile aws-ip
 
 _aws_ssm() {
   local name=($(aws ec2 describe-instances --output text  --filters "Name=instance-state-name,Values=running" --query "Reservations[].Instances[].{Name: Tags[?Key == 'Name'].Value | [0] }"))
   compadd ${name}
 }
 compdef _aws_ssm aws_ssm
-
-ssm-ls() {
-#local region="default"
-[[ $1 ]] && local region=$1
-aws ssm get-inventory --region $1
-}
-compdef _aws_region ssm-ls
-
-aws-ls() {
-#local profile="default"
-#local region="us-east-1"
-[[ $1 ]] && local profile=$1
-[[ $2 ]] && local region=$2
-aws ec2 describe-instances --output table --query "Reservations[].Instances[].{Name: Tags[?Key == 'Name'].Value | [0], Id: InstanceId, State: State.Name, Type: InstanceType, Placement: Placement.AvailabilityZone}" --profile $profile
-}
-compdef _aws_profile aws-ls
 
 _aws_region() {
   local regions=(us-east-1 us-east-2 us-west-1 us-west-2 eu-central-1 eu-west-1 eu-west-2 eu-south-1 eu-west-3 eu-north-1)
@@ -51,11 +53,40 @@ _aws_region() {
 }
 compdef _aws_region
 
+aws-tags() {
+local id=$(aws ec2 describe-instances --filters "Name=instance-state-name,Values=running" "Name=tag:Name,Values=$1" --output text --query 'Reservations[*].Instances[*].InstanceId')
+aws ec2 describe-instances --instance-ids $id | grep TAGS | cut -f2- | sed 's/[[:blank:]]/ /g' | sed 's/[[:blank:]]/: /' | sort
+}
+compdef _aws_ssm aws-tags
+
+
+_aws_instance_id() {
+  local instanceid=($(aws ec2 describe-instances --filters "Name=instance-state-name,Values=running" --query "Reservations[].Instances[].{Id: InstanceId}"))
+  compadd ${instanceid}
+}
+  compdef _aws_instance_id aws_tags
+
 aws_profile() {
   [[ $DEBUG ]] && echo -e "\033[34;1m[DEBUG]\033[0m switching aws profile to $1"
   export AWS_DEFAULT_PROFILE=$1
   export AWS_PROFILE=$1
-  #aws-id
+  export AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN_ORIG
+  export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID_ORIG
+  export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY_ORIG
+}
+
+aws_switch_role() {
+  export AWS_DEFAULT_PROFILE=$1
+  export AWS_PROFILE=$1
+  export AWS_SESSION_TOKEN=$AWS_SESSION_TOKEN_ORIG
+  export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID_ORIG
+  export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY_ORIG
+  local role_arn="$(grep -A1 $1 ~/.aws/credentials | grep 'role_arn' | awk -F' = ' '{print $2}')"
+  local json_command="aws sts assume-role --role-arn $role_arn --role-session-name Greg_testing"
+  local json=$(eval $json_command)
+  export AWS_SESSION_TOKEN=$(echo $json | jq --raw-output ".Credentials.SessionToken" )
+  export AWS_ACCESS_KEY_ID=$(echo $json | jq --raw-output ".Credentials.AccessKeyId" )
+  export AWS_SECRET_ACCESS_KEY=$(echo $json | jq --raw-output ".Credentials.SecretAccessKey" )
 }
 
 _aws_profile() {
@@ -64,4 +95,75 @@ _aws_profile() {
   [[ ${DEBUG} ]] && echo -e "\033[34;1m[DEBUG]\033[0m ${profiles}"
   compadd ${profiles}
 }
-compdef _aws_profile aws_profile
+compdef _aws_profile aws_profile aws_switch_role
+
+aws_instance_id_by_name () {
+local _USAGE="Usage: aws_instance_id_by_project_env [-hc] <NAME> <ENVIRONMENT>
+Options:
+-c|connect   Connect with SSM"
+
+while getopts ":hc" opt
+do
+  case $opt in
+
+    h|help     )  echo $_USAGE; return 0   ;;
+    c|connect  )  local connect=TRUE       ;;
+
+    * ) echo -e "\033[31;1m[ERROR]\033[0m Option does not exist : $OPTARG\n"
+      echo $_USAGE; return 1   ;;
+
+    esac    # --- end of case ---
+  done
+  shift $(($OPTIND-1))
+  local name=$1
+  local env=$2
+  shift $(($OPTIND[-2]))
+  local id_command="aws ec2 describe-instances --filters=Name=tag:Name,Values=$name --query 'Reservations[].Instances[].InstanceId' --output=text"
+  [[ $DEBUG ]] && echo -e "\033[34;1m[DEBUG]\033[0m Getting id command: \n $id_command"
+  local id=$(eval $id_command)
+  [[ -z $connect ]] && echo $id && return 0
+  aws ssm start-session --target $id
+}
+_aws_instance_by_name() {
+# TODO: Figure out partial completion
+local instances=$(aws ec2 describe-instances --query "Reservations[*].Instances[*].{Name:Tags[?Key=='Name']|[0].Value}" --output text)
+  [[ ${DEBUG} ]] && echo -e "\033[34;1m[DEBUG]\033[0m ${instances}"
+  compadd ${instances}
+}
+compdef _aws_instance_by_name aws_instance_id_by_name
+
+_git_branch_open() {
+local branches=($(git rev-parse --abbrev-ref=strict --all | uniq))
+  compadd ${branches}
+}
+compdef _git_branch_open bb_open
+
+bb_open() {
+  local remote=$(git config --get remote.origin.url)
+  local https=$(echo ${remote} | sed 's/git@/https:\/\//')
+  local egit=$(echo ${https} | sed 's/\.git$/\/src\//')
+  local addSlash=$(echo ${egit} | sed 's|\.org:|.org/|')
+  local commit=$(git log $1 | head -1 | cut -f2 -d" ")
+  open "${addSlash}$commit/?at=$1"
+}
+compdef _git_branch_open
+
+aws_mfa_session_token() {
+AWS_DEVICE_ARN=""
+  [[ -z $AWS_DEVICE_ARN ]] && echo -e "\033[31;1m[ERROR]\033[0m \$AWS_DEVICE_ARN note set please set this as a global before using" && return 1
+  [[ -z $1 ]] && echo -e "\033[31;1m[ERROR]\033[0m mfa input code required" && return 1
+  local device_arn=$AWS_DEVICE_ARN
+  local mfa_code=$1
+  local profile=${profile:-break-glass}
+  local json_command="aws sts get-session-token --serial-number $device_arn --output json --profile $profile --token-code $mfa_code"
+  [[ $DEBUG ]] && echo -e "\033[34;1m[DEBUG]\033[0m Getting json with:\n $json_command"
+  local json=$(eval $json_command)
+  export AWS_SESSION_TOKEN=$(echo $json | jq --raw-output ".Credentials.SessionToken" )
+  export AWS_ACCESS_KEY_ID=$(echo $json | jq --raw-output ".Credentials.AccessKeyId" )
+  export AWS_SECRET_ACCESS_KEY=$(echo $json | jq --raw-output ".Credentials.SecretAccessKey" )
+  export AWS_SESSION_TOKEN_ORIG=$AWS_SESSION_TOKEN
+  export AWS_ACCESS_KEY_ID_ORIG=$AWS_ACCESS_KEY_ID
+  export AWS_SECRET_ACCESS_KEY_ORIG=$AWS_SECRET_ACCESS_KEY
+  [[ $DEBUG ]] && echo -e "\033[34;1m[DEBUG]\033[0m AWS_SESSION_TOKEN set to: \n $AWS_SESSION_TOKEN"
+}
+compdef _aws_profile aws_mfa_session_token
