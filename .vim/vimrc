@@ -18,7 +18,19 @@ noremap <S-down> <c-w>-
 noremap <S-left> <c-w>>
 noremap <S-right> <c-w><
 
+" force save if you forgot to open with sudo
+cmap w!! %!sudo tee > /dev/null %
+
+" search for visualized text
+vnoremap // y/<C-R>"<CR>
+
+"List buffers and select one by number
+vnoremap /d y:silent !open https:\/\/www.duckduckgo.com\/?q=<C-R>"<CR>
+
+
+
 call plug#begin('~/.vim/plugged')
+Plug 'ironjr/gpt.vim', { 'do': 'pip3 install openai' }
 Plug 'tpope/vim-fugitive'
 Plug 'vim-airline/vim-airline'
 Plug 'hashivim/vim-terraform'
